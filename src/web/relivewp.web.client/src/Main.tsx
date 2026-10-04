@@ -10,6 +10,7 @@ import NavLoginLink from "./components/NavLoginLink"
 
 const Auth = lazy(() => import('./pages/auth'));
 const My = lazy(() => import('./pages/my'));
+const Downloads = lazy(() => import('./pages/downloads'));
 
 const NAV_ITEMS: NavItem[] = [
     { href: "/", label: "discover", exact: true },
@@ -29,7 +30,6 @@ const NotFound = () => {
     return <p>Coming soon :3</p>
 }
 
-// "/my/*" does not match bare "/my", so it needs its own entry rather than a default inside MyRouter
 const GoAccount = () => {
     const { route } = useLocation();
     useEffect(() => route("/my/account", true), []);
@@ -47,9 +47,10 @@ const Main = () => {
                         <ErrorBoundary>
                             <Router>
                                 <Route path="/" component={Home} />
-                                <AuthenticatedRoute path="/auth/*" requiredAuthState={false} component={Auth} />
+                                <Route path="/auth/*" component={Auth} />
                                 <Route path="/my" component={GoAccount} />
-                                <AuthenticatedRoute path="/my/*" requiredAuthState={true} component={My} />
+                                <AuthenticatedRoute path="/my/*" component={My} />
+                                <Route path="/downloads/:deviceId?" component={Downloads} />
                                 <Route default component={NotFound} />
                             </Router>
                         </ErrorBoundary>

@@ -11,7 +11,15 @@ export type FetchSignal<T> = {
 };
 
 export function useFetchSignal<T>(url: string, onData?: (data: T) => void): FetchSignal<T> {
-    const fetch = useAuthenticatedFetch();
+    const authenticatedFetch = useAuthenticatedFetch();
+    return useFetchSignalWith(authenticatedFetch, url, onData);
+}
+
+export function usePublicFetchSignal<T>(url: string, onData?: (data: T) => void): FetchSignal<T> {
+    return useFetchSignalWith(fetch, url, onData);
+}
+
+function useFetchSignalWith<T>(fetch: typeof window.fetch, url: string, onData?: (data: T) => void): FetchSignal<T> {
     const data = useSignal<T | null>(null);
     const error = useSignal<string | null>(null);
     const loading = useSignal(false);

@@ -17,7 +17,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
-    "@preact/signals": "^2.2.1",
+    "@preact/signals": "^2.11.3",
     "@relivewp/auth": "workspace:*",
     "@relivewp/calendar": "workspace:*",
     "@relivewp/eas-store": "workspace:*",
@@ -25,8 +25,8 @@
     "@relivewp/ui": "workspace:*",
     "@tanstack/virtual-core": "^3.17.7",
     "dompurify": "^3.4.13",
-    "preact": "^10.27.0",
-    "preact-iso": "^2.9.2"
+    "preact": "^11.0.0",
+    "preact-iso": "^2.12.2"
   },
   "devDependencies": {
     "@svgr/webpack": "^8.1.0",
@@ -36,6 +36,7 @@
     "file-loader": "^6.2.0",
     "html-webpack-plugin": "^5.6.4",
     "mini-css-extract-plugin": "^2.9.4",
+    "preact-render-to-string": "^6.7.0",
     "sass": "^1.90.0",
     "sass-loader": "^16.0.5",
     "style-loader": "^4.0.0",

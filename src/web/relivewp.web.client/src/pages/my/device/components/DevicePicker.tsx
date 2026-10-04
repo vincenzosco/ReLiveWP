@@ -1,11 +1,8 @@
 import "./device-picker.scss";
 
 import { Signal } from "@preact/signals";
-import { JSX } from "preact/jsx-runtime";
 import useDeviceImage from "~/util/device-image";
 import { Device, Devices } from "~/util/device-types";
-
-const SelectedContent = 'selectedcontent' as unknown as keyof JSX.IntrinsicElements;
 
 type DevicePickerProps = {
     deviceId: Signal<string | null>;
@@ -30,7 +27,7 @@ export default function DevicePicker({ deviceId, devices }: DevicePickerProps) {
     return (
         <select class="device-picker" value={deviceId.value ?? undefined} onChange={e => deviceId.value = e.currentTarget.value}>
             <button>
-                <SelectedContent></SelectedContent>
+                <selectedcontent></selectedcontent>
             </button>
             {devices.map(d => <DeviceOption key={d.id} device={d} />)}
         </select>

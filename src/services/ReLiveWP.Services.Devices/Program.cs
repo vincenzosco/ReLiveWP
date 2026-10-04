@@ -1,5 +1,8 @@
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using ReLiveWP.Identity;
+using ReLiveWP.Services.Devices.Controllers;
+using ReLiveWP.Services.Devices.Models;
 using ReLiveWP.Services.Devices.Services;
 using ReLiveWP.Services.Grpc;
 using ReLiveWP.Services.Grpc.DeviceRegistration;
@@ -40,6 +43,30 @@ builder.Services.AddGrpcClient<Authentication.AuthenticationClient>(
 builder.Services.AddSingleton<ICarrierLookupService, CarrierLookupService>();
 builder.Services.AddHostedService(sp => (CarrierLookupService)sp.GetRequiredService<ICarrierLookupService>());
 
+builder.Configuration.AddIniFile("Downloads/catalog.ini", optional: true, reloadOnChange: true);
+
+builder.Services.Configure<DownloadCatalogOptions>(
+    builder.Configuration.GetSection(DownloadCatalogOptions.SectionName));
+builder.Services.Configure<DownloadStorageOptions>(
+    builder.Configuration.GetSection(DownloadStorageOptions.SectionName));
+builder.Services.AddSingleton<DownloadCatalog>();
+builder.Services.AddSingleton<DownloadLinkSigner>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy(DownloadsController.RomLinkRateLimit, context => RateLimitPartition.GetSlidingWindowLimiter(
+        context.User.Id() ?? "anonymous",
+        _ => new SlidingWindowRateLimiterOptions()
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromHours(1),
+            SegmentsPerWindow = 6,
+            QueueLimit = 0,
+        }));
+});
+
 var app = builder.Build();
 
 app.UseStaticFiles();
@@ -47,6 +74,8 @@ app.UseStaticFiles();
 app.UseAuthentication();
 
 app.UseAuthorization();
+
+app.UseRateLimiter();
 
 app.MapControllers();
 

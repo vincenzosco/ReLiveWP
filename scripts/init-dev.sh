@@ -9,7 +9,6 @@ IDENTITY_DIR="$ROOT_DIR/src/backend/ReLiveWP.Backend.Identity"
 
 mkdir -p "$SECRETS_DIR"
 
-# -- JWT ECDSA P-256 key pair --------------------------------------------------
 if [ -f "$SECRETS_DIR/jwt_private_key" ]; then
     echo "JWT private key already exists, skipping generation."
 else
@@ -25,8 +24,6 @@ else
     echo "  Written: deploy/secrets/jwt_private_key"
 fi
 
-# Derive the public key (SPKI DER, base64) so verifiers can validate tokens without the private
-# key. Not secret; distributed to every verifying service as JWT:PublicKey (docker secret / config).
 if [ ! -f "$SECRETS_DIR/jwt_public_key" ]; then
     base64 -d "$SECRETS_DIR/jwt_private_key" \
         | openssl ec -inform DER -pubout -outform DER 2>/dev/null \
@@ -34,24 +31,16 @@ if [ ! -f "$SECRETS_DIR/jwt_public_key" ]; then
     echo "  Written: deploy/secrets/jwt_public_key"
 fi
 
-# -- Connection secret key -----------------------------------------------------
-# AES-256 key wrapping stored credentials for services linked with a username and password
-# rather than OAuth. ConnectedServices refuses to start without it once such a service exists.
 if [ ! -f "$SECRETS_DIR/connection_secret_key" ]; then
     openssl rand -base64 32 | tr -d '\n' > "$SECRETS_DIR/connection_secret_key"
     echo "  Written: deploy/secrets/connection_secret_key"
 fi
 
-# -- Media ticket secret --------------------------------------------------------
-# HMAC key behind the signed photo urls the web client loads media through. Only Activity holds it.
 if [ ! -f "$SECRETS_DIR/media_ticket_secret" ]; then
     openssl rand -base64 32 | tr -d '\n' > "$SECRETS_DIR/media_ticket_secret"
     echo "  Written: deploy/secrets/media_ticket_secret"
 fi
 
-# -- Passport STS key ----------------------------------------------------------
-# 3DES key sealing the DA token Identity hands back to wlidsvc. Must be 24 bytes, Identity
-# throws on startup without it.
 if [ ! -f "$SECRETS_DIR/passport_sts_key" ]; then
     openssl rand -base64 24 | tr -d '\n' > "$SECRETS_DIR/passport_sts_key"
     echo "  Written: deploy/secrets/passport_sts_key"

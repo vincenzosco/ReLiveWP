@@ -565,9 +565,14 @@ services:
       - ./deploy/services.ini:/app/services.ini:ro
       - ./deploy/certs/trust:/usr/local/share/ca-certificates/relive:ro
       - ./deploy/ReLiveWP.Services.Devices.ini:/app/ReLiveWP.Services.Devices.ini:ro
+      - ./deploy/data/downloads:/app/Downloads:ro
     secrets:
       - source: jwt_public_key
         target: JWT__PublicKey
+      - source: downloads_r2_access_key_id
+        target: Downloads__R2__AccessKeyId
+      - source: downloads_r2_secret_access_key
+        target: Downloads__R2__SecretAccessKey
 
   findmyphone:
     image: ${RELIVE_REGISTRY:-relive}/findmyphone:${RELIVE_TAG:-latest}
@@ -745,3 +750,7 @@ secrets:
     file: ./deploy/secrets/media_ticket_secret
   media_proxy_key:
     file: ./deploy/secrets/media_proxy_key
+  downloads_r2_access_key_id:
+    file: ./deploy/secrets/downloads_r2_access_key_id
+  downloads_r2_secret_access_key:
+    file: ./deploy/secrets/downloads_r2_secret_access_key

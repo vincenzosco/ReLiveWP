@@ -21,10 +21,16 @@ public static class DevicesMetrics
     public static Counter<long> RegistrationLookupFailures { get; } = Meter.CreateCounter<long>(
         "relivewp.devices.registration_lookup.failures", "{lookup}");
 
+    private static readonly Counter<long> DownloadLinksSigned = Meter.CreateCounter<long>(
+        "relivewp.devices.download_links.signed", "{link}");
+
     public static void RecordEventsStreamEnd(long startedTimestamp, bool cancelled) =>
         EventsStreamDuration.Record(Stopwatch.GetElapsedTime(startedTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("outcome", cancelled ? "cancelled" : "completed"));
 
     public static void RecordCommandRequested(string action) =>
         CommandsRequested.Add(1, new KeyValuePair<string, object?>("action", action));
+
+    public static void RecordDownloadLinkSigned(string romId) =>
+        DownloadLinksSigned.Add(1, new KeyValuePair<string, object?>("download", romId));
 }

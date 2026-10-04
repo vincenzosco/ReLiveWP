@@ -1,17 +1,16 @@
-import { Route, RouteProps, useLocation, useRoute } from "preact-iso"
+import { Route, RouteProps, useLocation } from "preact-iso"
 
 import { useAppState } from "~/state/app-state";
 import { useSignalEffect } from "@preact/signals";
+import { signInHref } from "~/util/sso";
 
-export default function AuthenticatedRoute<Props>({ requiredAuthState, ...props }: RouteProps<Props> & Partial<Props> & { requiredAuthState: boolean }) {
+export default function AuthenticatedRoute<Props>(props: RouteProps<Props> & Partial<Props>) {
     const { isAuthenticated } = useAppState();
-    const { route } = useLocation();
+    const { url, route } = useLocation();
 
     useSignalEffect(() => {
-        if (requiredAuthState && !isAuthenticated.value)
-            route('/auth/login', true);
-        if (!requiredAuthState && isAuthenticated.value)
-            route('/', true);
+        if (!isAuthenticated.value)
+            route(signInHref(url), true);
     });
 
     return <Route {...props} />

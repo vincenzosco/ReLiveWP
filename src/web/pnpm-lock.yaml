@@ -73,14 +73,17 @@ importers:
         version: 0.5.6
     devDependencies:
       '@preact/signals':
-        specifier: ^2.2.1
-        version: 2.2.1(preact@10.27.0)
+        specifier: ^2.11.3
+        version: 2.11.3(preact@11.0.0)
       preact:
-        specifier: ^10.27.0
-        version: 10.27.0
+        specifier: ^11.0.0
+        version: 11.0.0(preact-render-to-string@6.7.0)
       preact-iso:
-        specifier: ^2.9.2
-        version: 2.9.2(preact-render-to-string@6.5.13(preact@10.27.0))(preact@10.27.0)
+        specifier: ^2.12.2
+        version: 2.12.2(preact-render-to-string@6.7.0)(preact@11.0.0)
+      preact-render-to-string:
+        specifier: ^6.7.0
+        version: 6.7.0(preact@11.0.0)
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
@@ -91,8 +94,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1
       '@preact/signals':
-        specifier: ^2.2.1
-        version: 2.2.1(preact@10.27.0)
+        specifier: ^2.11.3
+        version: 2.11.3(preact@11.0.0)
       '@relivewp/auth':
         specifier: workspace:*
         version: link:../packages/auth
@@ -103,14 +106,14 @@ importers:
         specifier: ^1.9.4
         version: 1.9.4
       preact:
-        specifier: ^10.27.0
-        version: 10.27.0
+        specifier: ^11.0.0
+        version: 11.0.0(preact-render-to-string@6.7.0)
       preact-iso:
-        specifier: ^2.9.2
-        version: 2.9.2(preact-render-to-string@6.5.13(preact@10.27.0))(preact@10.27.0)
+        specifier: ^2.12.2
+        version: 2.12.2(preact-render-to-string@6.7.0)(preact@11.0.0)
       react-leaflet:
-        specifier: ^4.2.1
-        version: 4.2.1(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^5.0.0
+        version: 5.0.0(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
     devDependencies:
       '@babel/core':
         specifier: ^8.0.1
@@ -154,6 +157,9 @@ importers:
       node-loader:
         specifier: ^2.1.0
         version: 2.1.0(webpack@5.101.2)
+      preact-render-to-string:
+        specifier: ^6.7.0
+        version: 6.7.0(preact@11.0.0)
       sass:
         specifier: ^1.90.0
         version: 1.90.0
@@ -194,8 +200,8 @@ importers:
   relivewp.web.mail:
     dependencies:
       '@preact/signals':
-        specifier: ^2.2.1
-        version: 2.2.1(preact@10.27.0)
+        specifier: ^2.11.3
+        version: 2.11.3(preact@11.0.0)
       '@relivewp/auth':
         specifier: workspace:*
         version: link:../packages/auth
@@ -218,11 +224,11 @@ importers:
         specifier: ^3.4.13
         version: 3.4.13
       preact:
-        specifier: ^10.27.0
-        version: 10.27.0
+        specifier: ^11.0.0
+        version: 11.0.0(preact-render-to-string@6.7.0)
       preact-iso:
-        specifier: ^2.9.2
-        version: 2.9.2(preact-render-to-string@6.5.13(preact@10.27.0))(preact@10.27.0)
+        specifier: ^2.12.2
+        version: 2.12.2(preact-render-to-string@6.7.0)(preact@11.0.0)
     devDependencies:
       '@svgr/webpack':
         specifier: ^8.1.0
@@ -245,6 +251,9 @@ importers:
       mini-css-extract-plugin:
         specifier: ^2.9.4
         version: 2.9.4(webpack@5.101.2)
+      preact-render-to-string:
+        specifier: ^6.7.0
+        version: 6.7.0(preact@11.0.0)
       sass:
         specifier: ^1.90.0
         version: 1.90.0
@@ -1620,20 +1629,20 @@ packages:
     resolution: {integrity: sha512-dfUnCxiN9H4ap84DvD2ubjw+3vUNpstxa0TneY/Paat8a3R4uQZDLSvWjmznAY/DoahqTHl9V46HF/Zs3F29pg==}
     engines: {node: '>= 10.0.0'}
 
-  '@preact/signals-core@1.11.0':
-    resolution: {integrity: sha512-jglbibeWHuFRzEWVFY/TT7wB1PppJxmcSfUHcK+2J9vBRtiooMfw6tAPttojNYrrpdGViqAYCbPpmWYlMm+eMQ==}
+  '@preact/signals-core@1.14.4':
+    resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
 
-  '@preact/signals@2.2.1':
-    resolution: {integrity: sha512-cX3mijdjHbbz3dBoJ6z687CGYEOp9ifj3uFnm4UKW+DxXKPMvE2y/VSdm0PXhXmHnr6F0iSnDJ+dLwmV7CYT5A==}
+  '@preact/signals@2.11.3':
+    resolution: {integrity: sha512-mttwFM98G/JiriTgMwU+UWygL6sfVmYEiNcPSKkUnv4PxPpZhmP2ugGC4qi360+ZIHyQ8NY05bfJT3b4RUIGlw==}
     peerDependencies:
-      preact: '>= 10.25.0'
+      preact: '>= 10.25.0 || >=11.0.0-0'
 
-  '@react-leaflet/core@2.1.0':
-    resolution: {integrity: sha512-Qk7Pfu8BSarKGqILj4x7bCSZ1pjuAPZ+qmRwH5S7mDS91VSbVVsJSrW4qA+GPrro8t69gFYVMWb1Zc4yFmPiVg==}
+  '@react-leaflet/core@3.0.0':
+    resolution: {integrity: sha512-3EWmekh4Nz+pGcr+xjf0KNyYfC3U2JjnkWsh0zcqaexYqmmB5ZhH37kz41JXGmKzpaMZCnPofBBm64i+YrEvGQ==}
     peerDependencies:
       leaflet: ^1.9.0
-      react: ^18.0.0
-      react-dom: ^18.0.0
+      react: ^19.0.0
+      react-dom: ^19.0.0
 
   '@rollup/plugin-babel@6.1.0':
     resolution: {integrity: sha512-dFZNuFD2YRcoomP4oYf+DvQNSUA9ih+A3vUqopQx5EdtPGo3WBnQcI/S8pwpz91UsGfL0HsMSOlaMld8HrbubA==}
@@ -3817,19 +3826,24 @@ packages:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  preact-iso@2.9.2:
-    resolution: {integrity: sha512-0AiOid/B/L+cGQerFam2dSV8dkwmRXxqFyDcpdDj2faDuv83YF/g9HYX7MGKWjqSOaQGcl0HLMSFkUIzCq+z+g==}
+  preact-iso@2.12.2:
+    resolution: {integrity: sha512-qit+qSMiZ41K0EQkLNa3MSxnWVCm5yXvy9m3CcGf/zF1QhVJzSwVCbpiz52VSbWpg8v8nYNIYDrXJZPNFpM1uw==}
     peerDependencies:
-      preact: '>=10'
+      preact: '>=10 || >= 11.0.0-0'
       preact-render-to-string: '>=6.4.0'
 
-  preact-render-to-string@6.5.13:
-    resolution: {integrity: sha512-iGPd+hKPMFKsfpR2vL4kJ6ZPcFIoWZEcBf0Dpm3zOpdVvj77aY8RlLiQji5OMrngEyaxGogeakTb54uS2FvA6w==}
+  preact-render-to-string@6.7.0:
+    resolution: {integrity: sha512-Z4WR8fmLMRpdYqJ9i7vrlXSsSrxVJydwrkEXHapexfARbWfGb7vGcnvNQnIzN0cXciMVOlz/XLoiMCi9gUsy9Q==}
     peerDependencies:
-      preact: '>=10'
+      preact: '>=10 || >= 11.0.0-0'
 
-  preact@10.27.0:
-    resolution: {integrity: sha512-/DTYoB6mwwgPytiqQTh/7SFRL98ZdiD8Sk8zIUVOxtwq4oWcwrcd1uno9fE/zZmUaUrFNYzbH14CPebOz9tZQw==}
+  preact@11.0.0:
+    resolution: {integrity: sha512-LRTLKuSe6VYPhvBDjwFaX+nuZnpsw6IN2GSboisAvhGsncylBmrbDCERhgKDn6yP2mAwbGvsB5OVyTe33M8gBg==}
+    peerDependencies:
+      preact-render-to-string: '>=6.7.0'
+    peerDependenciesMeta:
+      preact-render-to-string:
+        optional: true
 
   pretty-bytes@5.6.0:
     resolution: {integrity: sha512-FFw039TmrBqFK8ma/7OL3sDz/VytdtJr044/QUJtH0wK9lb9jLq9tJyIxUwtQJHwar2BqtiA4iCWSwo9JLkzFg==}
@@ -3869,12 +3883,12 @@ packages:
     peerDependencies:
       react: ^19.2.7
 
-  react-leaflet@4.2.1:
-    resolution: {integrity: sha512-p9chkvhcKrWn/H/1FFeVSqLdReGwn2qmiobOQGO3BifX+/vV/39qhY8dGqbdcPh1e6jxh/QHriLXr7a4eLFK4Q==}
+  react-leaflet@5.0.0:
+    resolution: {integrity: sha512-CWbTpr5vcHw5bt9i4zSlPEVQdTVcML390TjeDG0cK59z1ylexpqC6M1PJFjV8jD7CF+ACBFsLIDs6DRMoLEofw==}
     peerDependencies:
       leaflet: ^1.9.0
-      react: ^18.0.0
-      react-dom: ^18.0.0
+      react: ^19.0.0
+      react-dom: ^19.0.0
 
   react@19.2.7:
     resolution: {integrity: sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ==}
@@ -6148,14 +6162,14 @@ snapshots:
       '@parcel/watcher-win32-x64': 2.5.1
     optional: true
 
-  '@preact/signals-core@1.11.0': {}
+  '@preact/signals-core@1.14.4': {}
 
-  '@preact/signals@2.2.1(preact@10.27.0)':
+  '@preact/signals@2.11.3(preact@11.0.0)':
     dependencies:
-      '@preact/signals-core': 1.11.0
-      preact: 10.27.0
+      '@preact/signals-core': 1.14.4
+      preact: 11.0.0(preact-render-to-string@6.7.0)
 
-  '@react-leaflet/core@2.1.0(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@react-leaflet/core@3.0.0(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       leaflet: 1.9.4
       react: 19.2.7
@@ -8360,16 +8374,18 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  preact-iso@2.9.2(preact-render-to-string@6.5.13(preact@10.27.0))(preact@10.27.0):
+  preact-iso@2.12.2(preact-render-to-string@6.7.0)(preact@11.0.0):
     dependencies:
-      preact: 10.27.0
-      preact-render-to-string: 6.5.13(preact@10.27.0)
+      preact: 11.0.0(preact-render-to-string@6.7.0)
+      preact-render-to-string: 6.7.0(preact@11.0.0)
 
-  preact-render-to-string@6.5.13(preact@10.27.0):
+  preact-render-to-string@6.7.0(preact@11.0.0):
     dependencies:
-      preact: 10.27.0
+      preact: 11.0.0(preact-render-to-string@6.7.0)
 
-  preact@10.27.0: {}
+  preact@11.0.0(preact-render-to-string@6.7.0):
+    optionalDependencies:
+      preact-render-to-string: 6.7.0(preact@11.0.0)
 
   pretty-bytes@5.6.0: {}
 
@@ -8409,9 +8425,9 @@ snapshots:
       react: 19.2.7
       scheduler: 0.27.0
 
-  react-leaflet@4.2.1(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  react-leaflet@5.0.0(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
-      '@react-leaflet/core': 2.1.0(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@react-leaflet/core': 3.0.0(leaflet@1.9.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       leaflet: 1.9.4
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)

@@ -28,14 +28,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@preact/signals": "^2.2.1",
-    "preact": "^10.27.0",
-    "preact-iso": "^2.9.2"
+    "@preact/signals": "^2.11.3",
+    "preact": "^11.0.0",
+    "preact-iso": "^2.12.2"
   },
   "devDependencies": {
-    "@preact/signals": "^2.2.1",
-    "preact": "^10.27.0",
-    "preact-iso": "^2.9.2",
+    "@preact/signals": "^2.11.3",
+    "preact": "^11.0.0",
+    "preact-iso": "^2.12.2",
+    "preact-render-to-string": "^6.7.0",
     "typescript": "^5.9.2"
   },
   "dependencies": {

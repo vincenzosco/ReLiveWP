@@ -1,17 +1,12 @@
-import { useSignal } from "@preact/signals";
-import { useEffect } from "preact/hooks";
 import { useTitle } from "@relivewp/ui";
 
 import { startSignUp } from "~/util/sso";
+import { useSsoRedirect } from "./use-sso-redirect";
 
 export default function Register() {
     useTitle("sign up");
 
-    const error = useSignal<string | null>(null);
-
-    useEffect(() => {
-        startSignUp().catch((e: Error) => { error.value = e.message; });
-    }, []);
+    const error = useSsoRedirect(startSignUp);
 
     return (
         <div>

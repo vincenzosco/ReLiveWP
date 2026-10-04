@@ -28,6 +28,14 @@ if (!Promise.prototype.finally) {
     };
 }
 
+if (!window.queueMicrotask) {
+    (window as { queueMicrotask?: unknown }).queueMicrotask = function (callback: VoidFunction) {
+        Promise.resolve()
+            .then(callback)
+            .catch((error) => setTimeout(() => { throw error; }));
+    };
+}
+
 if (!Object.fromEntries) {
     (Object as { fromEntries?: unknown }).fromEntries = function (entries: Iterable<readonly [PropertyKey, unknown]>) {
         const out: { [key: string]: unknown } = {};
