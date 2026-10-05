@@ -97,6 +97,10 @@ public class RST2Controller(
             return BadRequest();
         }
 
+        var credential = grpcRequest.DeviceAuthToken.Length > 0 ? "da-token" : grpcRequest.Username.Length > 0 ? "password" : "jwt";
+        logger.LogInformation("RST2 by {Credential} for {Targets}", credential,
+            string.Join(", ", grpcRequest.Requests.Select(r => $"{r.ServiceTarget} ({r.ServicePolicy})")));
+
         var grpcResponse = await authenticationClient.GetSecurityTokensAsync(grpcRequest);
         if (grpcResponse.Code != 0)
         {

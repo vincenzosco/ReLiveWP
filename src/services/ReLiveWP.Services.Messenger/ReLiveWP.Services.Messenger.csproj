@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
     <ProjectReference Include="..\..\libraries\ReLiveWP.ServiceDefaults\ReLiveWP.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\libraries\ReLiveWP.Passport\ReLiveWP.Passport.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="StackExchange.Redis" />

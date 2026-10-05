@@ -11,6 +11,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using ReLiveWP.Backend.Identity.Certificates;
 using ReLiveWP.Backend.Identity.Data;
 using ReLiveWP.Backend.Identity.Services;
+using ReLiveWP.Passport;
 using ReLiveWP.ServiceDefaults.Events;
 using ReLiveWP.Services.Grpc;
 using StackExchange.Redis;
@@ -19,6 +20,7 @@ namespace ReLiveWP.Backend.Identity.Grpc;
 
 public class AuthenticationService(
     TokenManager tokenManager,
+    UserRoleManager roleManager,
     LiveIdDeviceCertificateService deviceCertificateService,
     UserManager<LiveUser> userManager,
     UserRegistrationService registrationService,
@@ -49,7 +51,6 @@ public class AuthenticationService(
         if (result.User is not { } user)
             return new RegisterResponse() { Code = result.Code };
 
-        // best-effort: backends provision on this event, the mailbox reconciler backfills if it's lost
         try
         {
             await redis.PublishCreatedAsync(new AccountCreatedEvent(user.Id.ToString(), user.Email!, user.UserName!));
@@ -120,11 +121,11 @@ public class AuthenticationService(
         }
 
         var response = new VerifyResponse() { Code = S_OK, Id = result.ClaimsIdentity.Claims.First(c => c.Type == ClaimTypes.NameIdentifier)!.Value };
-        foreach (var claim in result.Claims)
-        {
-            if (claim.Value is string value) // TODO: other types
-                response.Claims.Add(new ClaimMessage() { Type = claim.Key, Value = value });
-        }
+        foreach (var claim in result.ClaimsIdentity.Claims)
+            response.Claims.Add(new ClaimMessage() { Type = claim.Type, Value = claim.Value });
+
+        if (request.IncludeProofKey && result.Claims.TryGetValue(JwtRegisteredClaimNames.Jti, out var jti) && jti is string tokenId)
+            response.ProofKey = ByteString.CopyFrom(tokenManager.DeriveTokenKey(TokenKeyPurpose.ServiceProof, tokenId));
 
         return response;
     }
@@ -174,14 +175,14 @@ public class AuthenticationService(
     {
         if (tokenRequest.ServiceTarget == LegacyDaTokenTarget)
         {
-            var da = tokenManager.IssueDeviceAuthToken(user);
+            var da = await tokenManager.IssueDeviceAuthTokenAsync(user);
 
             return new()
             {
                 ServiceTarget = tokenRequest.ServiceTarget,
                 Created = Timestamp.FromDateTimeOffset(da.Created),
                 Expires = Timestamp.FromDateTimeOffset(da.Expires),
-                Token = da.SealedToken,
+                Token = da.Token,
                 TokenType = "urn:passport:legacy",
                 ProofKey = ByteString.CopyFrom(da.ProofKey),
             };
@@ -210,21 +211,18 @@ public class AuthenticationService(
             };
         }
 
-        var (token, created, expires) = tokenManager.IssueJwtAsync(user, tokenRequest.ServiceTarget);
+        var issued = tokenManager.IssueJwtAsync(user, tokenRequest.ServiceTarget);
         var tokenResponse = new SecurityTokenResponse()
         {
             ServiceTarget = tokenRequest.ServiceTarget,
-            Created = Timestamp.FromDateTimeOffset(created),
-            Expires = Timestamp.FromDateTimeOffset(expires),
-            Token = token,
+            Created = Timestamp.FromDateTimeOffset(issued.Created),
+            Expires = Timestamp.FromDateTimeOffset(issued.Expires),
+            Token = issued.Token,
             TokenType = tokenRequest.ServicePolicy
         };
 
-        // MBI_KEY and MBI_KEY_OLD both request a proof/session key (the "_KEY" family); the
-        // _OLD variant (used by messengerclear.live.com for MSNP SSO) still needs the BinarySecret,
-        // it just denotes the legacy derivation scheme. Match on the family, not the exact suffix.
         if (tokenRequest.ServicePolicy.Contains("_KEY"))
-            tokenResponse.ProofKey = ByteString.CopyFrom(RandomNumberGenerator.GetBytes(24));
+            tokenResponse.ProofKey = ByteString.CopyFrom(tokenManager.DeriveTokenKey(TokenKeyPurpose.ServiceProof, issued.Jti));
 
         if (issueRefreshToken)
         {
@@ -255,13 +253,12 @@ public class AuthenticationService(
 
             user ??= redemption.User;
 
-            // a session-bound token came from the web SSO flow, so rotation has to keep its
-            // shorter lifetimes rather than falling back to the 30 day device default
             var session = redemption.SsoSessionId;
             var accessLifetime = session is null ? null : (TimeSpan?)tokenManager.WebAccessTokenLifetime;
             var refreshLifetime = session is null ? null : (TimeSpan?)tokenManager.WebRefreshTokenLifetime;
+            var roles = session is null ? null : await roleManager.GetRolesAsync(redemption.User);
 
-            var (token, created, expires) = tokenManager.IssueJwtAsync(redemption.User, redemption.ServiceTarget, accessLifetime, session);
+            var (token, created, expires) = tokenManager.IssueJwtAsync(redemption.User, redemption.ServiceTarget, accessLifetime, session, roles);
             var refresh = await tokenManager.IssueRefreshTokenAsync(redemption.User, redemption.ServiceTarget, refreshLifetime, session);
 
             response.Tokens.Add(new SecurityTokenResponse()

@@ -14,6 +14,11 @@ service User {
   rpc SetUserPicture(SetUserPictureRequest) returns (UserProfile);
   rpc ClearUserPicture(ClearUserPictureRequest) returns (UserProfile);
   rpc GetUserPicture(GetUserPictureRequest) returns (GetUserPictureResponse);
+
+  rpc GetUserRoles(GetUserRolesRequest) returns (UserRolesResponse);
+  rpc AddUserRole(UserRoleRequest) returns (UserRolesResponse);
+  rpc RemoveUserRole(UserRoleRequest) returns (UserRolesResponse);
+  rpc ListUsersInRole(ListUsersInRoleRequest) returns (ListUsersInRoleResponse);
 }
 
 
@@ -119,4 +124,25 @@ message GetUserPictureResponse {
   bytes  data        = 1;
   string contentType = 2;
   string etag        = 3;
+}
+
+message GetUserRolesRequest {
+  string userId = 1;
+}
+
+message UserRoleRequest {
+  string userId = 1;
+  string role   = 2;
+}
+
+message UserRolesResponse {
+  repeated string roles = 1;
+}
+
+message ListUsersInRoleRequest {
+  string role = 1;
+}
+
+message ListUsersInRoleResponse {
+  repeated UserSummary users = 1;
 }

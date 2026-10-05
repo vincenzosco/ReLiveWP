@@ -12,9 +12,13 @@ using ReLiveWP.Services.Grpc;
 
 namespace ReLiveWP.Backend.Identity.Services;
 
-public record struct SecurityToken(string Token, DateTimeOffset Created, DateTimeOffset Expires);
+public record struct SecurityToken(string Token, DateTimeOffset Created, DateTimeOffset Expires)
+{
+    public string Jti { get; init; } = "";
+}
+
 public record RefreshTokenRedemption(LiveUser User, string ServiceTarget, Guid? SsoSessionId = null);
-public record DeviceAuthToken(string SealedToken, byte[] ProofKey, DateTimeOffset Created, DateTimeOffset Expires);
+public record DeviceAuthToken(string Token, byte[] ProofKey, DateTimeOffset Created, DateTimeOffset Expires);
 public record AuthenticatedUser(LiveUser User, byte[]? SessionKey);
 
 public class TokenManager(
@@ -24,6 +28,13 @@ public class TokenManager(
     LiveDbContext dbContext)
 {
     private const string JwtIssuer = "https://relivewp.net/";
+    public const string RoleClaimType = "role";
+
+    // its own audience so a DA token is never a bearer token for a service that accepts Passport.NET/tb
+    public const string DeviceAuthAudience = "urn:relivewp:device-auth";
+
+    private TimeSpan ServiceTokenLifetime =>
+        TimeSpan.FromHours(int.TryParse(configuration["JWT:ServiceTokenLifetimeHours"], out var hours) ? hours : 24);
 
     private int RefreshTokenLifetimeDays =>
         int.TryParse(configuration["JWT:RefreshTokenLifetimeDays"], out var days) ? days : 90;
@@ -40,42 +51,53 @@ public class TokenManager(
     private byte[] StsKey => Convert.FromBase64String(
         configuration["Passport:StsKey"] ?? throw new InvalidOperationException("Passport:StsKey is not configured."));
 
-    public DeviceAuthToken IssueDeviceAuthToken(LiveUser user)
+    public byte[] DeriveTokenKey(TokenKeyPurpose purpose, string jti)
+        => TokenKeys.DeriveTokenKey(StsKey, purpose, jti);
+
+    public async Task<DeviceAuthToken> IssueDeviceAuthTokenAsync(LiveUser user)
     {
-        var sessionKey = DaToken.GenerateSessionKey();
-        var created = DateTimeOffset.UtcNow;
-        var expires = created.AddDays(DaTokenLifetimeDays);
+        var issued = IssueJwtAsync(user, DeviceAuthAudience, TimeSpan.FromDays(DaTokenLifetimeDays));
 
-        var sealed_ = DaToken.Seal(StsKey, new DaTokenPayload(
-            Puid: user.Puid,
-            Cid: user.Cid,
-            MemberName: user.Email ?? user.UserName ?? "",
-            SessionKey: sessionKey,
-            Created: created,
-            Expires: expires));
+        dbContext.LiveRefreshTokens.Add(new LiveRefreshToken()
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = Hash(issued.Jti),
+            ServiceTarget = DeviceAuthAudience,
+            CreatedAt = issued.Created,
+            ExpiresAt = issued.Expires,
+            DeviceId = user.DeviceId,
+        });
+        await dbContext.SaveChangesAsync();
 
-        return new DeviceAuthToken(sealed_, sessionKey, created, expires);
+        var wireToken = Convert.ToBase64String(Encoding.UTF8.GetBytes(issued.Token));
+        var sessionKey = DeriveTokenKey(TokenKeyPurpose.DeviceSession, issued.Jti);
+        return new DeviceAuthToken(wireToken, sessionKey, issued.Created, issued.Expires);
     }
 
-    public DaTokenPayload UnsealDeviceAuthToken(string cipherValue)
-        => DaToken.Unseal(StsKey, cipherValue);
-
-    public SecurityToken IssueJwtAsync(LiveUser user, string serviceTarget, TimeSpan? lifetime = null, Guid? sessionId = null)
+    public SecurityToken IssueJwtAsync(
+        LiveUser user,
+        string serviceTarget,
+        TimeSpan? lifetime = null,
+        Guid? sessionId = null,
+        IEnumerable<string>? roles = null)
     {
+        var jti = Guid.NewGuid().ToString();
         List<Claim> authClaims =
         [
             new Claim(JwtRegisteredClaimNames.Aud, serviceTarget),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, jti),
             new Claim(JwtRegisteredClaimNames.Iss, JwtIssuer),
 
-            ..BuildIdentityClaims(user, sessionId)
+            ..BuildIdentityClaims(user, sessionId),
+            ..(roles ?? []).Select(role => new Claim(RoleClaimType, role))
         ];
 
         var created = DateTimeOffset.UtcNow;
-        var expires = created.Add(lifetime ?? TimeSpan.FromDays(30));
+        var expires = created.Add(lifetime ?? ServiceTokenLifetime);
         var token = CreateToken(authClaims, expires);
 
-        return new SecurityToken(new JwtSecurityTokenHandler().WriteToken(token), created, expires);
+        return new SecurityToken(new JwtSecurityTokenHandler().WriteToken(token), created, expires) { Jti = jti };
     }
 
     public IEnumerable<Claim> BuildIdentityClaims(LiveUser user, Guid? sessionId = null)
@@ -243,26 +265,11 @@ public class TokenManager(
         }
 
         if (!string.IsNullOrWhiteSpace(request.DeviceAuthToken))
-        {
-            try
-            {
-                var payload = UnsealDeviceAuthToken(request.DeviceAuthToken);
-                var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Puid == payload.Puid);
-                return user is null
-                    ? Denied("da_token", "user_not_found")
-                    : Authenticated("da_token", user, payload.SessionKey);
-            }
-            catch (DaTokenException ex)
-            {
-                logger.LogWarning(ex, "Presented DA token could not be unsealed");
-                return Denied("da_token", "token_invalid");
-            }
-        }
+            return await AuthenticateDeviceAuthTokenAsync(request.DeviceAuthToken);
 
         if (!string.IsNullOrWhiteSpace(request.AuthToken))
         {
-            TokenValidationResult result = await ValidateJwtAsync(request.AuthToken, ["http://Passport.NET/tb"]);
-
+            var result = await ValidateJwtAsync(request.AuthToken, ["http://Passport.NET/tb"]);
             if (!result.IsValid)
                 return Denied("jwt", "token_invalid");
 
@@ -276,18 +283,72 @@ public class TokenManager(
         }
 
         return Denied("none", "no_credential");
+    }
 
-        static AuthenticatedUser? Denied(string method, string outcome)
+    private async Task<AuthenticatedUser?> AuthenticateDeviceAuthTokenAsync(string wireToken)
+    {
+        byte[] decoded;
+        try
         {
-            IdentityMetrics.RecordAuthAttempt(method, outcome);
-            return null;
+            decoded = Convert.FromBase64String(wireToken);
+        }
+        catch (FormatException)
+        {
+            return Denied("da_token", "token_invalid");
         }
 
-        static AuthenticatedUser Authenticated(string method, LiveUser user, byte[]? sessionKey)
+        var jwt = Encoding.UTF8.GetString(decoded);
+        if (!new JwtSecurityTokenHandler().CanReadToken(jwt))
+            return await AuthenticateSealedDeviceAuthTokenAsync(wireToken);
+
+        var result = await ValidateJwtAsync(jwt, [DeviceAuthAudience]);
+        if (!result.IsValid
+            || !result.Claims.TryGetValue(JwtRegisteredClaimNames.Jti, out var jtiClaim) || jtiClaim is not string jti
+            || !result.Claims.TryGetValue(ClaimTypes.NameIdentifier, out var userId))
+            return Denied("da_token", "token_invalid");
+
+        var hash = Hash(jti);
+        var issued = await dbContext.LiveRefreshTokens.AsNoTracking().FirstOrDefaultAsync(t => t.TokenHash == hash);
+        if (issued is null || issued.RevokedAt != null)
+            return Denied("da_token", "revoked");
+
+        var user = await userManager.FindByIdAsync(userId.ToString()!);
+        return user is null
+            ? Denied("da_token", "user_not_found")
+            : Authenticated("da_token", user, DeriveTokenKey(TokenKeyPurpose.DeviceSession, jti));
+    }
+
+    // TODO(wam): delete with DaToken.cs once relivewp.identity.auth.attempts{method="da_token_sealed"} has
+    // stayed at zero for a week, which can't happen before 30 days (the DA lifetime) after the JWT form shipped
+    private async Task<AuthenticatedUser?> AuthenticateSealedDeviceAuthTokenAsync(string cipherValue)
+    {
+        try
         {
-            IdentityMetrics.RecordAuthAttempt(method, "ok");
-            return new AuthenticatedUser(user, sessionKey);
+            var payload = DaToken.Unseal(StsKey, cipherValue);
+            var user = await dbContext.Users.FirstOrDefaultAsync(u => u.Puid == payload.Puid);
+            if (user is null)
+                return Denied("da_token_sealed", "user_not_found");
+
+            logger.LogInformation("User {User} is still on a sealed DA token issued {Issued}, expires {Expires}", user.Id, payload.Created, payload.Expires);
+            return Authenticated("da_token_sealed", user, payload.SessionKey);
         }
+        catch (DaTokenException ex)
+        {
+            logger.LogWarning(ex, "Presented DA token could not be unsealed");
+            return Denied("da_token_sealed", "token_invalid");
+        }
+    }
+
+    private static AuthenticatedUser? Denied(string method, string outcome)
+    {
+        IdentityMetrics.RecordAuthAttempt(method, outcome);
+        return null;
+    }
+
+    private static AuthenticatedUser Authenticated(string method, LiveUser user, byte[]? sessionKey)
+    {
+        IdentityMetrics.RecordAuthAttempt(method, "ok");
+        return new AuthenticatedUser(user, sessionKey);
     }
 
     public async Task<TokenValidationResult> ValidateJwtAsync(string token, string[] audiences)

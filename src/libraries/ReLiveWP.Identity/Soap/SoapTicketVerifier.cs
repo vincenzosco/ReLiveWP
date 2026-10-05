@@ -70,7 +70,9 @@ public class SoapTicketVerifier(GrpcClientFactory grpcClientFactory, ILogger<Soa
             return SoapTicketResult.Failed(SoapTicketStatus.Invalid);
         }
 
-        var claims = reply.Claims.ToDictionary(c => c.Type, c => c.Value);
+        var claims = reply.Claims
+            .GroupBy(c => c.Type)
+            .ToDictionary(g => g.Key, g => g.First().Value);
         return new SoapTicketResult(SoapTicketStatus.Valid, reply.Id, claims);
     }
 

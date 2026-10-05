@@ -20,7 +20,8 @@ public static class DaToken
     private const int IvLength = 8;         // 3DES block size
     public const int SessionKeyLength = 24; // 192-bit
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions 
+        = new(JsonSerializerDefaults.Web);
 
     public static byte[] GenerateSessionKey()
         => RandomNumberGenerator.GetBytes(SessionKeyLength);

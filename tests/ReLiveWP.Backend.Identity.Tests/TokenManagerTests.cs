@@ -1,4 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
@@ -7,6 +11,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using ReLiveWP.Backend.Identity.Data;
 using ReLiveWP.Backend.Identity.Services;
+using ReLiveWP.Passport;
+using ReLiveWP.Services.Grpc;
 
 namespace ReLiveWP.Backend.Identity.Tests;
 
@@ -33,12 +39,15 @@ public class TokenManagerTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    private const string StsKey = "dW5pdCB0ZXN0IHN0cyBrZXkgMjRieXRl";
+
     private TokenManager Manager()
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["JWT:Secret"] = "a-test-signing-secret-that-is-long-enough-for-hmac-sha256",
+                ["Passport:StsKey"] = StsKey,
             })
             .Build();
 
@@ -62,12 +71,118 @@ public class TokenManagerTests : IDisposable
     };
 
     [Fact]
-    public void Jwt_with_no_lifetime_still_lasts_thirty_days()
+    public void Jwt_with_no_lifetime_lasts_a_day()
     {
         var issued = Manager().IssueJwtAsync(User(), "relivewp.net");
 
-        var days = (issued.Expires - issued.Created).TotalDays;
-        Assert.InRange(days, 29.9, 30.1);
+        var hours = (issued.Expires - issued.Created).TotalHours;
+        Assert.InRange(hours, 23.9, 24.1);
+    }
+
+    [Fact]
+    public async Task Device_auth_token_comes_back_as_its_user_with_the_same_session_key()
+    {
+        var manager = Manager();
+        var user = User();
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        var issued = await manager.IssueDeviceAuthTokenAsync(user);
+        var authenticated = await manager.GetUserForSecurityTokenAsync(new SecurityTokensRequest { DeviceAuthToken = issued.Token });
+
+        Assert.NotNull(authenticated);
+        Assert.Equal(user.Id, authenticated!.User.Id);
+        Assert.Equal(issued.ProofKey, authenticated.SessionKey);
+        Assert.InRange((issued.Expires - issued.Created).TotalDays, 29.9, 30.1);
+    }
+
+    [Fact]
+    public async Task Revoked_device_auth_token_is_refused()
+    {
+        var manager = Manager();
+        var user = User();
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        var issued = await manager.IssueDeviceAuthTokenAsync(user);
+        await _db.LiveRefreshTokens
+            .Where(t => t.ServiceTarget == TokenManager.DeviceAuthAudience)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow));
+
+        Assert.Null(await manager.GetUserForSecurityTokenAsync(new SecurityTokensRequest { DeviceAuthToken = issued.Token }));
+    }
+
+    [Fact]
+    public async Task Device_auth_token_is_not_a_bearer_token_for_services()
+    {
+        var manager = Manager();
+        var issued = await manager.IssueDeviceAuthTokenAsync(User());
+        var jwt = Encoding.UTF8.GetString(Convert.FromBase64String(issued.Token));
+
+        var asServiceToken = await manager.ValidateJwtAsync(jwt, ["http://Passport.NET/tb", "relivewp.net"]);
+
+        Assert.False(asServiceToken.IsValid);
+    }
+
+    [Fact]
+    public async Task Sealed_device_auth_token_from_before_the_jwt_form_is_still_accepted()
+    {
+        var manager = Manager();
+        var user = User();
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        var sessionKey = DaToken.GenerateSessionKey();
+        var sealedToken = DaToken.Seal(Convert.FromBase64String(StsKey), new DaTokenPayload(
+            user.Puid, user.Cid, user.Email!, sessionKey, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1)));
+
+        var authenticated = await manager.GetUserForSecurityTokenAsync(new SecurityTokensRequest { DeviceAuthToken = sealedToken });
+
+        Assert.Equal(user.Id, authenticated?.User.Id);
+        Assert.Equal(sessionKey, authenticated?.SessionKey);
+    }
+
+    [Fact]
+    public async Task Sealed_device_auth_token_whose_iv_looks_like_a_jwt_is_still_accepted()
+    {
+        var manager = Manager();
+        var user = User();
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        var sessionKey = DaToken.GenerateSessionKey();
+        var payload = new DaTokenPayload(
+            user.Puid, user.Cid, user.Email!, sessionKey, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
+        var sealedToken = SealWithIv(payload, [.. "eyJ"u8, 0, 0, 0, 0, 0]);
+
+        var authenticated = await manager.GetUserForSecurityTokenAsync(new SecurityTokensRequest { DeviceAuthToken = sealedToken });
+
+        Assert.Equal(user.Id, authenticated?.User.Id);
+        Assert.Equal(sessionKey, authenticated?.SessionKey);
+    }
+
+    private static string SealWithIv(DaTokenPayload payload, byte[] iv)
+    {
+        var plaintext = JsonSerializer.SerializeToUtf8Bytes(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        using var des = TripleDES.Create();
+        des.Key = Convert.FromBase64String(StsKey);
+        var ciphertext = des.EncryptCbc(plaintext, iv, PaddingMode.PKCS7);
+
+        return Convert.ToBase64String([.. iv, .. ciphertext]);
+    }
+
+    [Fact]
+    public void Service_proof_key_is_fixed_by_the_token_id()
+    {
+        var manager = Manager();
+
+        Assert.Equal(
+            manager.DeriveTokenKey(TokenKeyPurpose.ServiceProof, "jti-1"),
+            manager.DeriveTokenKey(TokenKeyPurpose.ServiceProof, "jti-1"));
+        Assert.NotEqual(
+            manager.DeriveTokenKey(TokenKeyPurpose.ServiceProof, "jti-1"),
+            manager.DeriveTokenKey(TokenKeyPurpose.DeviceSession, "jti-1"));
     }
 
     [Fact]
@@ -93,6 +208,39 @@ public class TokenManagerTests : IDisposable
 
         Assert.Equal(sessionId.ToString(), withSession.Claims.Single(c => c.Type == "sid").Value);
         Assert.DoesNotContain(withoutSession.Claims, c => c.Type == "sid");
+    }
+
+    [Fact]
+    public void Jwt_carries_one_role_claim_per_role()
+    {
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(
+            Manager().IssueJwtAsync(User(), "relivewp.net", null, Guid.NewGuid(), ["marketplace.admin", "marketplace.reviewer"]).Token);
+
+        var roles = token.Claims.Where(c => c.Type == TokenManager.RoleClaimType).Select(c => c.Value);
+        Assert.Equal(["marketplace.admin", "marketplace.reviewer"], roles);
+    }
+
+    [Fact]
+    public void Jwt_without_roles_carries_no_role_claims()
+    {
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(
+            Manager().IssueJwtAsync(User(), "relivewp.net").Token);
+
+        Assert.DoesNotContain(token.Claims, c => c.Type == TokenManager.RoleClaimType);
+    }
+
+    [Fact]
+    public async Task Role_claims_survive_validation_as_identity_roles()
+    {
+        var manager = Manager();
+        var issued = manager.IssueJwtAsync(User(), "relivewp.net", null, Guid.NewGuid(), ["marketplace.reviewer"]);
+
+        var result = await manager.ValidateJwtAsync(issued.Token, ["relivewp.net"]);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(result.ClaimsIdentity.Claims, "LiveID"));
+
+        Assert.True(result.IsValid);
+        Assert.True(principal.IsInRole("marketplace.reviewer"));
+        Assert.False(principal.IsInRole("marketplace.admin"));
     }
 
     [Fact]

@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using System.Text;
 using Google.Protobuf;
 using Grpc.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using ReLiveWP.Passport;
 using ReLiveWP.Services.Grpc;
 using ReLiveWP.Services.Grpc.Chat;
 using ReLiveWP.Services.Messenger.Msnp;
@@ -18,20 +20,27 @@ public class MsnpGatewayServiceTests
         "CVR 2 0x0409 winnt 7.5 arm WLM 7.5.7720 MSNMSGR alice@example.com\r\n" +
         "USR 3 SSO I alice@example.com\r\n";
 
-    private static readonly string SignInBatch =
-        $"USR 4 SSO S t=ticket p= secret {Epid}\r\n" +
-        "FSL 5 579 0\r\n" +
-        "CHL 6\r\n" +
-        SelfPresencePut("7");
+    private static readonly byte[] ProofKey = Convert.FromBase64String("dW5pdCB0ZXN0IHN0cyBrZXkgMjRieXRl");
 
     private readonly InMemorySessionStore sessions = new();
     private readonly FakeChatClient chat = new();
     private readonly RecordingSessionWaker waker = new();
     private readonly InMemoryDeviceStore devices = new();
 
+    private string ChallengeResponse(string sessionId) =>
+        Convert.ToBase64String(SessionKeyBlob.CreateNonceResponse(ProofKey, sessions.Sessions[sessionId].Nonce));
+
+    private string SignInUsr(string sessionId) => $"USR 4 SSO S t=ticket&p= {ChallengeResponse(sessionId)} {Epid}\r\n";
+
+    private string SignInBatch(string sessionId) =>
+        SignInUsr(sessionId) +
+        "FSL 5 579 0\r\n" +
+        "CHL 6\r\n" +
+        SelfPresencePut("7");
+
     private static VerifyResponse Verified()
     {
-        var response = new VerifyResponse { Code = 0, Id = "user-alice" };
+        var response = new VerifyResponse { Code = 0, Id = "user-alice", ProofKey = ByteString.CopyFrom(ProofKey) };
         response.Claims.Add(new ClaimMessage { Type = "email", Value = "alice@example.com" });
         return response;
     }
@@ -46,7 +55,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(new FakeAuthenticationClient(_ => Verified()), options);
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
         return (gateway, sessionId);
     }
 
@@ -71,7 +80,7 @@ public class MsnpGatewayServiceTests
         var gateway = CreateGateway(auth);
         var sessionId = await OpenAsync(gateway);
 
-        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch);
+        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         Assert.Equal(4, lines.Length);
         Assert.Equal("USR 4 OK alice@example.com 1 0", lines[0]);
@@ -88,7 +97,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         var lines = await PollLinesAsync(gateway, sessionId, $"QRY 8 APPID 32\r\n{new string('a', 32)}");
 
@@ -101,7 +110,59 @@ public class MsnpGatewayServiceTests
         var gateway = CreateGateway(_ => new VerifyResponse { Code = 0x80048821 });
         var sessionId = await OpenAsync(gateway);
 
-        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch);
+        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
+
+        Assert.Equal(["911 4"], lines);
+        Assert.Empty(sessions.Sessions);
+    }
+
+    [Fact]
+    public async Task ValidTicketWithTheWrongChallengeResponseGets911()
+    {
+        var gateway = CreateGateway(_ => Verified());
+        var sessionId = await OpenAsync(gateway);
+        var staleResponse = Convert.ToBase64String(SessionKeyBlob.CreateNonceResponse(ProofKey, "a nonce from last time"));
+
+        var lines = await PollLinesAsync(gateway, sessionId, $"USR 4 SSO S t=ticket&p= {staleResponse} {Epid}\r\nFSL 5 579 0\r\n");
+
+        Assert.Equal(["911 4"], lines);
+        Assert.Empty(sessions.Sessions);
+    }
+
+    [Fact]
+    public async Task EmailComesFromTheMappedClaimTypeIdentitySends()
+    {
+        var verified = new VerifyResponse { Code = 0, Id = "user-alice", ProofKey = ByteString.CopyFrom(ProofKey) };
+        verified.Claims.Add(new ClaimMessage { Type = ClaimTypes.Email, Value = "Alice@Example.com" });
+        var gateway = CreateGateway(_ => verified);
+        var sessionId = await OpenAsync(gateway);
+
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
+
+        Assert.Equal("Alice@Example.com", sessions.Sessions[sessionId].Email);
+    }
+
+    [Fact]
+    public async Task RepeatedClaimsDontBreakSignIn()
+    {
+        var verified = Verified();
+        verified.Claims.Add(new ClaimMessage { Type = ClaimTypes.Role, Value = "marketplace.admin" });
+        verified.Claims.Add(new ClaimMessage { Type = ClaimTypes.Role, Value = "marketplace.reviewer" });
+        var gateway = CreateGateway(_ => verified);
+        var sessionId = await OpenAsync(gateway);
+
+        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
+
+        Assert.Equal("USR 4 OK alice@example.com 1 0", lines[0]);
+    }
+
+    [Fact]
+    public async Task TicketWithoutAnEmailClaimGets911()
+    {
+        var gateway = CreateGateway(_ => new VerifyResponse { Code = 0, Id = "user-alice", ProofKey = ByteString.CopyFrom(ProofKey) });
+        var sessionId = await OpenAsync(gateway);
+
+        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         Assert.Equal(["911 4"], lines);
         Assert.Empty(sessions.Sessions);
@@ -125,7 +186,7 @@ public class MsnpGatewayServiceTests
         var gateway = CreateGateway(_ => throw new RpcException(new Status(StatusCode.Unavailable, "down")));
         var sessionId = await OpenAsync(gateway);
 
-        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch);
+        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         Assert.Equal(["500 4"], lines);
         Assert.Empty(sessions.Sessions);
@@ -160,7 +221,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         var reply = await gateway.PollAsync(sessionId, Parse("OUT\r\n"), TimeSpan.Zero, CancellationToken.None);
 
@@ -175,7 +236,7 @@ public class MsnpGatewayServiceTests
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
 
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         var registered = Assert.Single(chat.Registered);
         Assert.Equal(sessionId, registered.EndpointId);
@@ -194,7 +255,7 @@ public class MsnpGatewayServiceTests
         var sessionId = await OpenAsync(gateway);
         var injectedPresence = PresencePayload.Replace("epid=" + Epid, "epid={\" x=\"}");
         var batch =
-            $"USR 4 SSO S t=ticket p= secret {Epid}\r\n" +
+            SignInUsr(sessionId) +
             $"PUT 5 {Encoding.UTF8.GetByteCount(injectedPresence)}\r\n{injectedPresence}";
 
         await PollLinesAsync(gateway, sessionId, batch);
@@ -208,7 +269,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         await PollLinesAsync(gateway, sessionId, "");
 
@@ -221,7 +282,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         var busy = PresencePayload.Replace("NLN", "BSY");
         await PollLinesAsync(gateway, sessionId, $"PUT 8 {busy.Length}\r\n{busy}");
@@ -236,7 +297,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
         chat.EndpointState = EndpointState.Unknown;
 
         await PollLinesAsync(gateway, sessionId, "");
@@ -249,7 +310,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
         chat.EndpointState = EndpointState.Superseded;
 
         await PollLinesAsync(gateway, sessionId, "");
@@ -281,7 +342,7 @@ public class MsnpGatewayServiceTests
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
 
-        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch);
+        var lines = await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         Assert.Equal("USR 4 OK alice@example.com 1 0", lines[0]);
         Assert.False(sessions.Sessions[sessionId].ChatRegistered);
@@ -292,7 +353,7 @@ public class MsnpGatewayServiceTests
     {
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
-        await PollLinesAsync(gateway, sessionId, SignInBatch);
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId));
 
         sessions.QueueChatDelivery(sessionId, Presence("bob@example.com", PresenceStatus.Busy));
         sessions.QueueChatDelivery(sessionId, Presence("carol@example.com", PresenceStatus.Offline));
@@ -361,7 +422,7 @@ public class MsnpGatewayServiceTests
         var gateway = CreateGateway(_ => Verified());
         var sessionId = await OpenAsync(gateway);
 
-        await PollLinesAsync(gateway, sessionId, SignInBatch + Sdg("8", SdgPayload("hi")));
+        await PollLinesAsync(gateway, sessionId, SignInBatch(sessionId) + Sdg("8", SdgPayload("hi")));
 
         Assert.Equal(["RegisterEndpoint", "SendMessage"], chat.Calls);
     }

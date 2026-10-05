@@ -61,6 +61,7 @@
     <Project Path="tests/ReLiveWP.Dav.Tests/ReLiveWP.Dav.Tests.csproj" />
     <Project Path="tests/ReLiveWP.Identity.Tests/ReLiveWP.Identity.Tests.csproj" />
     <Project Path="tests/ReLiveWP.Mail.Tests/ReLiveWP.Mail.Tests.csproj" />
+    <Project Path="tests/ReLiveWP.Passport.Tests/ReLiveWP.Passport.Tests.csproj" />
     <Project Path="tests/ReLiveWP.ProductKeys.Tests/ReLiveWP.ProductKeys.Tests.csproj" />
     <Project Path="tests/ReLiveWP.Services.Activation.Tests/ReLiveWP.Services.Activation.Tests.csproj" />
     <Project Path="tests/ReLiveWP.Services.AddressBook.Tests/ReLiveWP.Services.AddressBook.Tests.csproj" />

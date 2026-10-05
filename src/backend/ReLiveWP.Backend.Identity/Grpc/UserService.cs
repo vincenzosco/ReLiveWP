@@ -16,6 +16,7 @@ public class UserService(
     LiveDbContext dbContext,
     AvatarStore avatarStore,
     AvatarProcessor avatarProcessor,
+    UserRoleManager roleManager,
     IConnectionMultiplexer redis,
     ILogger<UserService> logger) : User.UserBase
 {
@@ -238,6 +239,42 @@ public class UserService(
             ContentType = profile.PictureContentType ?? "image/jpeg",
             Etag = profile.PictureEtag,
         };
+    }
+
+    public override async Task<UserRolesResponse> GetUserRoles(GetUserRolesRequest request, ServerCallContext context)
+    {
+        var roles = await roleManager.GetRolesAsync(request.UserId);
+        return new UserRolesResponse { Roles = { roles } };
+    }
+
+    public override async Task<UserRolesResponse> AddUserRole(UserRoleRequest request, ServerCallContext context)
+    {
+        var roles = await roleManager.AddRoleAsync(request.UserId, request.Role);
+        return new UserRolesResponse { Roles = { roles } };
+    }
+
+    public override async Task<UserRolesResponse> RemoveUserRole(UserRoleRequest request, ServerCallContext context)
+    {
+        var roles = await roleManager.RemoveRoleAsync(request.UserId, request.Role);
+        return new UserRolesResponse { Roles = { roles } };
+    }
+
+    public override async Task<ListUsersInRoleResponse> ListUsersInRole(ListUsersInRoleRequest request, ServerCallContext context)
+    {
+        var users = await roleManager.GetUsersInRoleAsync(request.Role);
+
+        var response = new ListUsersInRoleResponse();
+        foreach (var user in users)
+        {
+            response.Users.Add(new UserSummary
+            {
+                Id = user.Id.ToString(),
+                Username = user.UserName ?? "",
+                EmailAddress = user.Email ?? "",
+            });
+        }
+
+        return response;
     }
 
     private async Task<LiveUser> FindUserAsync(string userId) =>

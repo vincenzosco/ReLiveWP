@@ -10,6 +10,7 @@ namespace ReLiveWP.Backend.Identity.Grpc;
 public class SsoService(
     SsoSessionManager sessions,
     TokenManager tokenManager,
+    UserRoleManager roleManager,
     UserManager<LiveUser> userManager,
     ILogger<SsoService> logger) : Sso.SsoBase
 {
@@ -178,10 +179,11 @@ public class SsoService(
             EmailAddress = user.Email,
         };
 
+        var roles = await roleManager.GetRolesAsync(user);
         foreach (var target in payload.ServiceTargets)
         {
             var (token, created, expires) = tokenManager.IssueJwtAsync(
-                user, target, tokenManager.WebAccessTokenLifetime, payload.SessionId);
+                user, target, tokenManager.WebAccessTokenLifetime, payload.SessionId, roles);
             var refresh = await tokenManager.IssueRefreshTokenAsync(
                 user, target, tokenManager.WebRefreshTokenLifetime, payload.SessionId);
 

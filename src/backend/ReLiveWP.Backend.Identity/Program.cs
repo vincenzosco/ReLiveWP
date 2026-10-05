@@ -33,6 +33,7 @@ builder.Services.AddIdentity<LiveUser, LiveRole>(options =>
 .AddPasswordValidator<UserPasswordValidator>();
 
 builder.Services.AddScoped<TokenManager>();
+builder.Services.AddScoped<UserRoleManager>();
 builder.Services.AddScoped<UserRegistrationService>();
 AddInviteCodeValidator(builder);
 builder.Services.AddScoped<SsoSessionManager>();
@@ -50,6 +51,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     scope.ServiceProvider.GetRequiredService<LiveDbContext>().Database.Migrate();
+    await scope.ServiceProvider.GetRequiredService<UserRoleManager>().ProvisionAsync();
 }
 
 if (JwtKeyLoader.GetVerifyingKey(app.Configuration) is ECDsaSecurityKey publicKey)

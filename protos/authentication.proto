@@ -117,15 +117,17 @@ message ClaimMessage {
 }
 
 message VerifyTokenRequest {
-  repeated string serviceTargets = 1;
-  string          token          = 2;
-  string          tokenType      = 3;
+  repeated string serviceTargets  = 1;
+  string          token           = 2;
+  string          tokenType       = 3;
+  bool            includeProofKey = 4;
 }
 
 message VerifyResponse {
-  uint32                code   = 1;
-  string                id     = 3;
-  repeated ClaimMessage claims = 2;
+  uint32                code     = 1;
+  string                id       = 3;
+  repeated ClaimMessage claims   = 2;
+  optional bytes        proofKey = 4;
 }
 
 message DeviceCertificateRequest {

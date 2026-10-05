@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Xml;
 using System.Xml.Linq;
 using Google.Protobuf;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
+using ReLiveWP.Passport;
 using ReLiveWP.ServiceDefaults;
 using ReLiveWP.Services.Grpc;
 using ReLiveWP.Services.Grpc.Chat;
@@ -567,8 +569,8 @@ public class MsnpGatewayService(
 
     private async Task<SsoTicketVerification> VerifySsoTicketAsync(MsnpGatewaySession session, MsnpCommand usr, CancellationToken ct)
     {
-        var ticketArg = usr.Arguments.FirstOrDefault(a => a.StartsWith("t=", StringComparison.OrdinalIgnoreCase));
-        var ticket = ticketArg?[2..];
+        var ticketIndex = Array.FindIndex(usr.Arguments, a => a.StartsWith("t=", StringComparison.OrdinalIgnoreCase));
+        var ticket = ticketIndex >= 0 ? usr.Arguments[ticketIndex][2..] : null;
         if (ticket is { Length: > 0 } && ticket.IndexOf('&') is var amp and >= 0)
             ticket = ticket[..amp];
 
@@ -579,7 +581,8 @@ public class MsnpGatewayService(
             return SsoTicketVerification.Rejected;
         }
 
-        var request = new VerifyTokenRequest { Token = ticket, TokenType = "JWT" };
+        var challengeResponse = ticketIndex + 1 < usr.Arguments.Length ? usr.Arguments[ticketIndex + 1] : null;
+        var request = new VerifyTokenRequest { Token = ticket, TokenType = "JWT", IncludeProofKey = true };
         request.ServiceTargets.AddRange(ServiceTargets);
 
         VerifyResponse reply;
@@ -601,12 +604,27 @@ public class MsnpGatewayService(
             return SsoTicketVerification.Rejected;
         }
 
+        if (!ProvesPossession(reply, session.Nonce, challengeResponse))
+        {
+            logger.LogWarning("MSNP gateway session {SessionId}: SSO ticket is valid but the challenge response doesn't match its proof key", session.SessionId);
+            MessengerMetrics.RecordSsoVerification("bad_proof");
+            return SsoTicketVerification.Rejected;
+        }
+
+        var claims = reply.Claims
+            .GroupBy(c => c.Type)
+            .ToDictionary(g => g.Key, g => g.First().Value);
+        var email =claims.GetValueOrDefault(ClaimTypes.Email) ?? claims.GetValueOrDefault("email");
+        if (string.IsNullOrEmpty(email))
+        {
+            logger.LogWarning("MSNP gateway session {SessionId}: SSO ticket has no email claim, refusing rather than trusting the address the phone typed", session.SessionId);
+            MessengerMetrics.RecordSsoVerification("no_email");
+            return SsoTicketVerification.Rejected;
+        }
+
         MessengerMetrics.RecordSsoVerification("ok");
         session.UserId = reply.Id;
-        var claims = reply.Claims.ToDictionary(c => c.Type, c => c.Value);
-        if (claims.TryGetValue("email", out var email) && !string.IsNullOrEmpty(email))
-            session.Email = email;
-
+        session.Email = email;
         session.Cid = claims.GetValueOrDefault("cid");
         session.Puid = claims.TryGetValue("puid", out var puidHex)
             && long.TryParse(puidHex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var puid)
@@ -616,6 +634,24 @@ public class MsnpGatewayService(
         logger.LogInformation("MSNP gateway session {SessionId} SSO ticket verified: user {UserId} (puid={Puid} cid={Cid})",
             session.SessionId, session.UserId, session.Puid, session.Cid);
         return SsoTicketVerification.Verified;
+    }
+
+    private static bool ProvesPossession(VerifyResponse reply, string nonce, string? challengeResponse)
+    {
+        if (!reply.HasProofKey || string.IsNullOrEmpty(challengeResponse))
+            return false;
+
+        byte[] blob;
+        try
+        {
+            blob = Convert.FromBase64String(challengeResponse);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return SessionKeyBlob.VerifyNonceResponse(reply.ProofKey.ToByteArray(), nonce, blob);
     }
 
     public async Task<bool> PushPresenceAsync(
