@@ -18,11 +18,28 @@ Windows Phone 7 Discovery Service, used for discovering mobile operators and the
 ### `marketplaceedgeservice.windowsphone.com`
 Functionally equivalent to `catalogue.zune.net`.
 
+The WP8.1 client also asks it for its service configuration at start-up:
+`GET /v8/Configuration/Stores/OEMStores/{OEMID}` and `/v8/Configuration/Stores/MOStores/{MOID}`,
+answered with a `ConfigurationFile` document. Measured on a Lumia 625, `os=8.10.14219.0` — the
+URL template, the document grammar and the setting names are in
+[`wp81_store_protocol.md`](wp81_store_protocol.md).
+
 ### `cdn.marketplaceedgeservice.windowsphone.com`, `cdn.marketplaceimages.windowsphone.com`
 Functionally equivalent to `image.catalogue.zune.net`.
 
+These two are not the same job on WP8.1, even though they share a row above: the CDN host serves
+the store page (`/v9/catalog/storePages?typeId=DynamicHub.Main&…`) and the application lists,
+while the images host serves every icon, screenshot and background
+(`/v8/images/{guid}?imagetype=icon_small`). Mixing them up turns every icon into a 404 the client
+will not draw. See [`wp81_store_protocol.md`](wp81_store_protocol.md).
+
 ### `marketplaceconfigservice.windowsphone.com`
 Unsure, possibly equivalent to `tuners.zune.net`.
+
+Corroborated as the tuner backend: the client's own configuration document names it as
+`WPAppsMarketplaceTunerService`, in the same `<setting>` list that carries every other service
+base. No request to it has been observed from a WP8.1 Store open, and a revival can leave the
+setting out rather than point it at a host that would fail.
 
 ## `*.passport.net`
 ### `clientconfig.passport.net`
