@@ -65,6 +65,31 @@ Two things to know before implementing it:
   use it, and the failure then happens somewhere the document does not name — images, or a
   purchase. The lab omits `TunerService` for exactly that reason.
 
+## The endpoint table: the URL templates behind those settings
+
+The same FFU block that carries the settings is a table of `<ep>` entries, each a URL template with `{Placeholder}`s the
+client fills from the configuration and from its own request. The four that matter for a Store implementation, quoted from
+`3058.50000.1445.1005` (@1177094311):
+
+```
+<ep id="Application"        url="{WPAppsMarketplaceShop}v9/catalog/apps/{objectid}?os={FullPhoneVersion}&amp;cc={DeviceUserGeoIDCountry}&amp;lang={DeviceUserDefaultUILanguage}&amp;hw={DeviceHardwareBitmask}&amp;dm={DeviceModelName}&amp;oemId={DeviceRawOEMID}&amp;moId={MOUniqueID}&amp;cf={ContentFilter}{urltail}" />
+<ep id="ApplicationSecure"  url="{WPAppsMarketplaceShopSecure}v9/catalog/apps/{objectid}?…" />
+<ep id="ApplicationSearch"  url="{WPAppsMarketplaceShop}v9/catalog/apps?…&amp;chunkSize={appsearchchunksize}&amp;q={query}&amp;cf={ContentFilter}" />
+<ep id="PrefixSearch"       url="{WPAppsMarketplaceAutoSuggest}v8/catalog/queries?…&amp;prefix={query}&amp;chunksize=4&amp;includeApplications={includeapplications}&amp;includeAlbums={includealbums}&amp;includeArtists={includeartists}&amp;includeTracks={includetracks}&amp;includePodcasts={includepodcasts}&amp;cf={ContentFilter}" />
+```
+
+Four things follow, and each of them costs an hour to rediscover:
+
+- **`/v9/catalog/apps` is both the detail call and the search.** With `{objectid}` it is one app; with `q={query}` it is a
+  result list. There is no separate search service.
+- **`chunkSize` is a search parameter**, filled from `{appsearchchunksize}`. It is not a page-size field of the catalogue, so a
+  client that never sends one is not refusing to page — it is not searching.
+- **`/v8/catalog/queries` is the *suggestion* endpoint** (`PrefixSearch`) and its base is `WPAppsMarketplaceAutoSuggest`, which
+  the shipped `PROD` domain points at the **CDN host on plain http**. Its `includeAlbums`, `includeArtists`, `includeTracks` and
+  `includePodcasts` parameters are the Zune-generation media families, asked beside `includeApplications`.
+- **`cf={ContentFilter}` and `{urltail}` ride every one of them**, and `urltail` is appended outside the query string, so a
+  reimplementation that assumes it is a parameter will build a URL the client never asked for.
+
 ## The store page
 
 ```
